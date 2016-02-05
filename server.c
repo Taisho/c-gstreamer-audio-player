@@ -4,37 +4,39 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include "queue.h"
+#include "player.h"
 
 #define BUF_SIZE 1024*1024
 #define SOCKET_READ_LENGTH 320
-#define PATH_LENGTH 4069
-#define TRACK_LIST_SIZE 10
 
-typedef struct
-{
-    char filename[PATH_LENGTH];
-} TrackEntry;
 
 //char *socket_path = "./socket";
 char *socket_path = "\0hidden";
-Queue_t* playlist_queue;
-Queue_t* working_queue;
-TrackEntry * trackList;
+//Queue_t* playlist_queue;
+//Queue_t* working_queue;
+extern void * pipeline;
  
 void execute (char * command)
 {
+    //FIXME This code relies on Queue_t queues. We no longer support that
     switch (command[0])
     {
     case 'Q':
-        if (! queue_is_full (playlist_queue))
+
+        if (! playlistIsFull (mainQueue))
         {
             /* Store filename, so we can retrieve it later */
-            int trackIndex = queue_count(playlist_queue);
-            strcpy((char*) &trackList[trackIndex].filename, &command[1]);
+            //int trackIndex = queue_count(playlist_queue); //FIXME do not retrieve trackIndex this way. It is incorrect
+							//TODO retrieve trackIndex through traversing
+            //strcpy((char*) &trackList[trackIndex].filename, &command[1]);
 
             /* Enqueue */
+	    playlistAppendFileName(mainQueue, &command[1]);
+	    g_signal_emit_by_name(pipeline, "playlist-updated", NULL);
+
             printf("Enqueue: %s\n", &command[1]);
-            queue_push (playlist_queue, (char*) &trackList[trackIndex]);
+	    //TODO signal main thread that the playlist has been updated
+            //queue_push (playlist_queue, (char*) &trackList[trackIndex]);
         }
         else
         {
@@ -42,10 +44,21 @@ void execute (char * command)
         }
         break;
 
+    case 'N':
+
+	g_signal_emit_by_name(pipeline, "playback-next", NULL);
+	break;
+
+    case 'T':
+
+	g_signal_emit_by_name(pipeline, "playback-toggle", NULL);
+	break;
+
     case 'P':
-        printf("Print playlist:\n");
+	//TODO create a function to dump playlist
+        printf("Print playlist not implemented\n");
         /* Retrieve data from queue */
-        char *registry;
+/*        char *registry;
         //printf("Popping out of the queue: \n");
         for (int i=0; ; i++)
         {
@@ -62,22 +75,22 @@ void execute (char * command)
         void * queue = playlist_queue;
         playlist_queue = working_queue;
         working_queue = queue;
-
+*/
         break;     
     }
 }
 
-int main(int argc, char *argv[]) {
+void * do_server (void * arg){
   struct sockaddr_un addr;
   char * buf;
   int buf_size=BUF_SIZE;
   int socketReadLength = SOCKET_READ_LENGTH;
   int fd,cl,rc = 0, buf_offset = 0;
-  playlist_queue = queue_new(3); 
-  working_queue = queue_new(3); 
+  //playlist_queue = queue_new(3); 
+  //working_queue = queue_new(3); 
 
 
-  if (argc > 1) socket_path=argv[1];
+  //if (argc > 1) socket_path=argv[1];
 
   if ( (fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
     perror("socket error");
@@ -108,9 +121,9 @@ int main(int argc, char *argv[]) {
     }
 
     buf = (char*) malloc(buf_size);
-    trackList = malloc(sizeof(TrackEntry) * TRACK_LIST_SIZE);
+    //trackList = malloc(sizeof(TrackEntry) * TRACK_LIST_SIZE);
 
-    if (buf == NULL || trackList == NULL)
+    if (buf == NULL)
     {
         perror("memory allocation error");
         continue;
@@ -132,8 +145,6 @@ int main(int argc, char *argv[]) {
             //printf("buffer %i: %s\n", buf, buf);
             execute (buf);
             buf_offset = 0; //reset buffer
-            /* Recieve next data adjecent to the previous one. This effectively means we have a "data history" */
-            //buf += buf_offset;
         }
 
     }

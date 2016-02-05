@@ -1,16 +1,16 @@
 #include <stdio.h>
 #include <glib.h>
 #include <gst/gst.h>
-#include "types.h"
+#include "player.h"
 
-extern Playlist_t data[];
-extern void set_slider_value(gdouble);
+//extern void set_slider_value(gdouble);
 
 GstElement* pipeline;
 GstBus *bus;
 guint bus_watch_id;
-guint playlist_index=0;
+//guint playlist_index=0;
 gdouble stream_length;
+Playlist_t * mainQueue;
 
 static gboolean
 bus_call (GstBus     *bus,
@@ -50,9 +50,14 @@ bus_call (GstBus     *bus,
 }
 
 void next_track(GstElement *playbin, gpointer userdata){
-  playlist_index++;
-  g_object_set(G_OBJECT(playbin), "uri", data[playlist_index].filename , NULL);
-  g_print ("Now playing: %s\n", data[playlist_index].filename);
+    //if(trackIndex+1 <= playlist.nTracks)
+  //playlist_index++;
+
+    if(playlistNextTrack(mainQueue))
+    {
+	g_object_set(G_OBJECT(playbin), "uri", playlistGetCurrentFileName(mainQueue) , NULL);
+	g_print ("Now playing: %s\n", playlistGetCurrentFileName(mainQueue));
+    }
 }
 
 void seek_in_seconds(gdouble seconds){
@@ -62,6 +67,7 @@ void seek_in_seconds(gdouble seconds){
   printf("%f\n", seconds);
 }
 
+/*
 static gboolean
 cb_print_position (){
   gint64 pos, len;
@@ -77,8 +83,39 @@ cb_print_position (){
 
       //set_slider_value(new_position_in_slider);
     }
+} */
+void runPlayback(gpointer userdata){
+
+    //TODO get GST_STATE
+    GstState state;
+    gst_element_get_state(pipeline, &state, NULL, GST_CLOCK_TIME_NONE);
+
+    if(state == GST_STATE_READY || state == GST_STATE_PAUSED){ 
+
+	//FIXME This is not how to play the next track. Google
+	g_object_set (G_OBJECT (pipeline), "uri", playlistGetCurrentFileName(mainQueue), NULL);
+	gst_element_set_state (pipeline, GST_STATE_PLAYING);
+    }
+
 }
 
+void playbackToggle(gpointer userdata){
+
+    //TODO get GST_STATE
+    GstState state;
+    gst_element_get_state(pipeline, &state, NULL, GST_CLOCK_TIME_NONE);
+
+    if(state == GST_STATE_PLAYING ){ 
+
+	gst_element_set_state (pipeline, GST_STATE_PAUSED);
+    }
+    else{
+
+	//g_object_set (G_OBJECT (pipeline), "uri", playlistGetCurrentFileName(mainQueue), NULL);
+	gst_element_set_state (pipeline, GST_STATE_PLAYING);
+    }
+
+}
 void do_gstreamer_player(){
 
   gst_init (NULL, NULL);
@@ -96,19 +133,32 @@ void do_gstreamer_player(){
   g_signal_connect(G_OBJECT(pipeline), "about-to-finish",
 		   G_CALLBACK(next_track), NULL);
 
+  g_signal_connect(G_OBJECT(pipeline), "playlist-updated",
+		   G_CALLBACK(runPlayback), NULL);
+
+  g_signal_connect(G_OBJECT(pipeline), "playback-next",
+		   G_CALLBACK(next_track), NULL);
+
+  g_signal_connect(G_OBJECT(pipeline), "playback-toggle",
+		   G_CALLBACK(playbackToggle), NULL);
+
+    //FIXME at startup the MainQueue should be empty!
   /* we set the input filename to the source element */
-  g_object_set (G_OBJECT (pipeline), "uri", data[0].filename, NULL);
+  //g_object_set (G_OBJECT (pipeline), "uri", data[0].filename, NULL);
 
   /* we add a message handler */
   bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
   bus_watch_id = gst_bus_add_watch (bus, bus_call, NULL);
   gst_object_unref (bus);
 
+    //FIXME start in Paused state!
   /* Set the pipeline to "playing" state*/
-  g_print ("Now playing: %s\n", data[0].filename);
-  gst_element_set_state (pipeline, GST_STATE_PLAYING);
 
-  g_print ("Running...\n");
-  g_timeout_add(250, (GSourceFunc) cb_print_position, NULL);
+/*  g_print ("Now playing: %s\n", data[0].filename);
+  g_object_set (G_OBJECT (pipeline), "uri", data[0].filename, NULL);
+  gst_element_set_state (pipeline, GST_STATE_PLAYING);
+*/
+  //g_print ("Running...\n");
+  //g_timeout_add(250, (GSourceFunc) cb_print_position, NULL);
 
 }

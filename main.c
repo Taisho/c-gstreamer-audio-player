@@ -1,25 +1,46 @@
 #include <glib-object.h>
-#include "types.h"
+#include <gtk/gtk.h>
+#include <pthread.h>
+#include "player.h"
+#include "server.h"
 
-/* This program creates a tree view
- * and modifies a particular row
- */
+//gdouble fill_level;
 
-extern void do_gstreamer_player();
-extern void seek_in_seconds(gdouble);
-extern gdouble stream_length;
+pthread_t server_thread;
 
-gdouble fill_level;
-
-Playlist_t data[]=
-{
-  {1, "Adress on web", "Adress on web", "Radio 161fm", "00:00", "file:///home/tichomir/Music-Collection/Radio161-2014-95-21/003.Adress on web.ogg"},
-  {2, "Hot Natured Feat. Roisin Murphy", "Alternate State", "Radio 161fm", "00:00", "file:///home/tichomir/Music-Collection/Radio161-2014-95-21/004.Hot Natured Feat. Roisin Murphy - Alternate State.ogg"},
-};
 
 int main (int argc, char **argv){
-  /* Run the play back */
-  do_gstreamer_player();
-  gtk_main();
-  return 0;
+
+    /* Register new signal */
+    g_signal_new("playlist-updated",
+             G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
+             0, NULL, NULL,
+             g_cclosure_marshal_VOID__POINTER,
+             G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+    g_signal_new("playback-next",
+             G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
+             0, NULL, NULL,
+             g_cclosure_marshal_VOID__POINTER,
+             G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+    g_signal_new("playback-toggle",
+             G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
+             0, NULL, NULL,
+             g_cclosure_marshal_VOID__POINTER,
+             G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+
+    /* Allocate MainQueue */
+    mainQueue = playlistNew(10); //10 entries
+
+    printf("cap: %i\nnTr: %i\n", mainQueue->capacity, mainQueue->nTracks);
+
+    /* Run server */
+    pthread_create(&server_thread, NULL, do_server, NULL);
+
+    /* Run the play back */
+    do_gstreamer_player();
+    gtk_main();
+    return 0;
 } 
