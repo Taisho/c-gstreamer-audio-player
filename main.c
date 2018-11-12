@@ -11,7 +11,7 @@ pthread_t server_thread;
 
 int main (int argc, char **argv){
 
-    /* Register new signal */
+    /* Register signals */
     g_signal_new("playlist-updated",
              G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
              0, NULL, NULL,
@@ -24,11 +24,25 @@ int main (int argc, char **argv){
              g_cclosure_marshal_VOID__POINTER,
              G_TYPE_NONE, 1, G_TYPE_POINTER);
 
+    g_signal_new("playback-previous",
+             G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
+             0, NULL, NULL,
+             g_cclosure_marshal_VOID__POINTER,
+             G_TYPE_NONE, 1, G_TYPE_POINTER);
+
     g_signal_new("playback-toggle",
              G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
              0, NULL, NULL,
              g_cclosure_marshal_VOID__POINTER,
              G_TYPE_NONE, 1, G_TYPE_POINTER);
+
+    //FIXME define proper parameters 
+    g_signal_new("playback-seek",
+             G_TYPE_OBJECT, G_SIGNAL_RUN_FIRST,
+             0, NULL, NULL,
+             g_cclosure_marshal_VOID__POINTER,
+             G_TYPE_NONE, 1, G_TYPE_POINTER);
+
 
 
     /* Allocate MainQueue */

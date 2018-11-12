@@ -31,6 +31,8 @@ void execute (char * command)
             //strcpy((char*) &trackList[trackIndex].filename, &command[1]);
 
             /* Enqueue */
+	    //TODO automatically add 'file://' as a prefix
+	    //TODO check if file exists
 	    playlistAppendFileName(mainQueue, &command[1]);
 	    g_signal_emit_by_name(pipeline, "playlist-updated", NULL);
 
@@ -49,6 +51,16 @@ void execute (char * command)
 	g_signal_emit_by_name(pipeline, "playback-next", NULL);
 	break;
 
+    case 'n':
+
+	g_signal_emit_by_name(pipeline, "playback-previous", NULL);
+	break;
+
+    case 'S':
+
+	g_signal_emit_by_name(pipeline, "playback-seek", NULL);
+	break;
+
     case 'T':
 
 	g_signal_emit_by_name(pipeline, "playback-toggle", NULL);
@@ -56,7 +68,8 @@ void execute (char * command)
 
     case 'P':
 	//TODO create a function to dump playlist
-        printf("Print playlist not implemented\n");
+        //printf("Print playlist not implemented\n");
+	playlistDump(mainQueue);
         /* Retrieve data from queue */
 /*        char *registry;
         //printf("Popping out of the queue: \n");
@@ -132,6 +145,7 @@ void * do_server (void * arg){
     while ( (rc=read(cl,buf+buf_offset,socketReadLength)) > 0) {
         buf_offset += rc;
 
+	//FIXME This may fail if data has even number of bytes
         if (rc < socketReadLength)
         {/* Final chunk of data arrived */
 

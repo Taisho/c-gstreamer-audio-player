@@ -60,11 +60,22 @@ void next_track(GstElement *playbin, gpointer userdata){
     }
 }
 
-void seek_in_seconds(gdouble seconds){
-  gst_element_seek (pipeline, 1.0, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH,
-		    GST_SEEK_TYPE_SET, seconds * GST_SECOND,
-		    GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
-  printf("%f\n", seconds);
+void playbackSeekInSeconds(gpointer pointerAsSeconds){
+
+    //TODO check whether stream is seekable
+    static int seconds=60;
+
+    GstState state;
+    gst_element_get_state(pipeline, &state, NULL, GST_CLOCK_TIME_NONE);
+
+    if(state == GST_STATE_PLAYING || state == GST_STATE_PAUSED ){ 
+	gst_element_seek (pipeline, 1.0, GST_FORMAT_TIME, GST_SEEK_FLAG_FLUSH,
+			GST_SEEK_TYPE_SET, seconds * GST_SECOND,
+			GST_SEEK_TYPE_NONE, GST_CLOCK_TIME_NONE);
+	printf("%i\n", seconds);
+
+	seconds+=10;
+    }
 }
 
 /*
@@ -84,24 +95,42 @@ cb_print_position (){
       //set_slider_value(new_position_in_slider);
     }
 } */
-void runPlayback(gpointer userdata){
+//TODO rename runPlayback -> ... advanceInPlaylist?
+void playbackNextTrack(gpointer userdata){
 
-    //TODO get GST_STATE
-    GstState state;
-    gst_element_get_state(pipeline, &state, NULL, GST_CLOCK_TIME_NONE);
+    gst_element_set_state (pipeline, GST_STATE_NULL);
 
-    if(state == GST_STATE_READY || state == GST_STATE_PAUSED){ 
+    if(playlistNextTrack(mainQueue)){
 
-	//FIXME This is not how to play the next track. Google
 	g_object_set (G_OBJECT (pipeline), "uri", playlistGetCurrentFileName(mainQueue), NULL);
 	gst_element_set_state (pipeline, GST_STATE_PLAYING);
     }
-
 }
 
+void playbackPreviousTrack(gpointer userdata){
+
+    gst_element_set_state (pipeline, GST_STATE_NULL);
+
+    if(playlistPreviousTrack(mainQueue)){
+
+	g_object_set (G_OBJECT (pipeline), "uri", playlistGetCurrentFileName(mainQueue), NULL);
+	gst_element_set_state (pipeline, GST_STATE_PLAYING);
+    }
+}
+
+//TODO implement the following function
+/*
+void playbackSetVolume(gdouble volume){
+    //if (volume < 1.0)
+   g_object_set(pipeline, "volume", volume, NULL); 
+}
+*/
+
+//FIXME GStreamer complains that it cannot access certain resources (files)
+//for example: BONVIVANT b2b DENIS GREAT Live - Heaven Mixology Podcast #008-2 (13.03.2015).mp3
 void playbackToggle(gpointer userdata){
 
-    //TODO get GST_STATE
+    //get GST_STATE
     GstState state;
     gst_element_get_state(pipeline, &state, NULL, GST_CLOCK_TIME_NONE);
 
@@ -111,7 +140,14 @@ void playbackToggle(gpointer userdata){
     }
     else{
 
-	//g_object_set (G_OBJECT (pipeline), "uri", playlistGetCurrentFileName(mainQueue), NULL);
+	gchar *uri;
+	g_object_get(pipeline, "uri", &uri, NULL);
+	printf("uri: %s\n", uri);
+
+	if(uri == NULL){
+	    g_object_set (G_OBJECT (pipeline), "uri", playlistGetCurrentFileName(mainQueue), NULL);
+	    printf("new uri: %s\n", playlistGetCurrentFileName(mainQueue));
+	}
 	gst_element_set_state (pipeline, GST_STATE_PLAYING);
     }
 
@@ -130,17 +166,24 @@ void do_gstreamer_player(){
   /* Set up the pipeline */
 
   /* When a song is about to finish, our handler prepares the next track */
+    //TODO rename next_track -> continuePlayback
   g_signal_connect(G_OBJECT(pipeline), "about-to-finish",
 		   G_CALLBACK(next_track), NULL);
 
-  g_signal_connect(G_OBJECT(pipeline), "playlist-updated",
-		   G_CALLBACK(runPlayback), NULL);
+  //g_signal_connect(G_OBJECT(pipeline), "playlist-updated",
+//		   G_CALLBACK(runPlayback), NULL);
 
   g_signal_connect(G_OBJECT(pipeline), "playback-next",
-		   G_CALLBACK(next_track), NULL);
+		   G_CALLBACK(playbackNextTrack), NULL);
+
+  g_signal_connect(G_OBJECT(pipeline), "playback-previous",
+		   G_CALLBACK(playbackPreviousTrack), NULL);
 
   g_signal_connect(G_OBJECT(pipeline), "playback-toggle",
 		   G_CALLBACK(playbackToggle), NULL);
+
+  g_signal_connect(G_OBJECT(pipeline), "playback-seek",
+		   G_CALLBACK(playbackSeekInSeconds), NULL);
 
     //FIXME at startup the MainQueue should be empty!
   /* we set the input filename to the source element */
