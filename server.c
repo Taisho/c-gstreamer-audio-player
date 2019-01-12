@@ -128,6 +128,7 @@ void * do_server (void * arg){
 
 
   while (1) {
+      //TODO place condition which would terminate the program
     if ( (cl = accept(fd, NULL, NULL)) == -1) {
       perror("accept error");
       continue;
