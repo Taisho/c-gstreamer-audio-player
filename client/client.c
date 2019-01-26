@@ -9,7 +9,7 @@
 #include "../playlist.h"
 
 GtkWidget* mainwin = NULL;
-GtkTreeModel* model = NULL;
+GtkTreeModel* model_schedule = NULL;
 
 char *socket_path = "\0hidden";
 int socket_fd; //socket file descriptor
@@ -17,44 +17,38 @@ int socket_fd; //socket file descriptor
 enum { 
   COLUMN_ORDINAL,
   COLUMN_TYPE,
-  COLUMN_ARTIST,
-  COLUMN_TITLE,
   COLUMN_NAME,
-  COLUMN_ALBUM,
   COLUMN_LENGTH,
   COLUMN_STARTTIME,
+  /* COLUMN_NAME,
+  COLUMN_ALBUM,
+  COLUMN_LENGTH,
+  COLUMN_STARTTIME, */
   NUM_COLUMNS
 };
 
+GtkTargetEntry dndtargets[] =
+{
+  { "STRING",        0, 1},
+  { "text/plain",    0, 1},
+  { "text/uri-list", 0, 2},
+};
+
 static GtkTreeModel *
-create_model (void)
+create_model_schedule (void)
 {
   gint i = 0;
   GtkListStore *store;
-  GtkTreeIter iter;
 
   /* create list store */
   store = gtk_list_store_new (NUM_COLUMNS,
-			      G_TYPE_INT,
+                              G_TYPE_INT,
                               G_TYPE_STRING,
                               G_TYPE_STRING,
                               G_TYPE_STRING,
                               G_TYPE_STRING);
 
-  /* add data to the list store */
-//  for (i = 0; i < 4; i++)
-//    {
-//      gtk_list_store_append (store, &iter);
-//      gtk_list_store_set (store, &iter,
-//                          COLUMN_TRACKNUMBER, data[i].tracknumber,
-//                          COLUMN_ARTIST, data[i].artist,
-//			  COLUMN_TITLE, data[i].title,
-//			  COLUMN_ALBUM, data[i].album,
-//			  COLUMN_LENGTH, data[i].length,
-//                          -1);
-//    }
-
-  return GTK_TREE_MODEL (store);
+  return GTK_TREE_MODEL(store);
 }
 
 int connect_server() {
@@ -78,19 +72,6 @@ int connect_server() {
     perror("connect error");
     return -1;
   }
-}
-
-void fetch_playlist() {
-//  int rc = -1;
-//  while( (rc=read(STDIN_FILENO, buf, sizeof(buf))) > 0) {
-//    if (write(fd, buf, rc) != rc) {
-//      if (rc > 0) fprintf(stderr,"partial write");
-//      else {
-//        perror("write error");
-//        exit(-1);
-//      }
-//    }
-//  }
 }
 
 void create_playlist(); 
@@ -118,6 +99,37 @@ void init_menus(vbox) {
     gtk_widget_show (file_item);
 }
 
+void drag_drop_schedule (GtkWidget        *widget,
+               GdkDragContext   *drag_context,
+               gint              x,
+               gint              y,
+               GtkSelectionData *data,
+               guint             info,
+               guint             time,
+               gpointer          user_data) {
+
+    printf("data received: %s\n", data->data);
+    GtkTreeIter iter;
+
+    gtk_list_store_append(model_schedule, &iter);
+
+
+    GValue value = G_VALUE_INIT;
+    g_value_unset(&value);
+    g_value_init(&value, G_TYPE_STRING);
+    g_value_set_string(&value, data->data);
+    gtk_list_store_set_value(model_schedule, &iter, 2, &value);
+
+    //TODO URL decode data-data before sending in to the socket
+    guchar * msg = malloc(strlen(data->data)+2);
+    *msg = 'Q';
+    strncpy(msg+1, data->data, strlen(data->data));
+    write(socket_fd, (char*)msg, strlen(msg)); 
+    free(msg);
+
+    g_signal_stop_emission_by_name(widget, "drag_data_received");
+}
+
 void init_notebook_schedule(GtkWidget *notebook) {
     GtkWidget *treeview;
     GtkWidget *label; //we will use this for notebook's labels for pages
@@ -125,8 +137,9 @@ void init_notebook_schedule(GtkWidget *notebook) {
     GtkCellRenderer *renderer;
 
     /* create a tree view */
-    //model = create_model();
-    treeview = gtk_tree_view_new();
+    model_schedule = create_model_schedule();
+    treeview = gtk_tree_view_new_with_model(model_schedule);
+
     renderer = gtk_cell_renderer_text_new();
 
     /* column for rule number */ 
@@ -169,9 +182,22 @@ void init_notebook_schedule(GtkWidget *notebook) {
             NULL);
     gtk_tree_view_append_column(treeview, column);
 
+    //make columns resizable
+    for(int i=0; i<NUM_COLUMNS; i++) {
+        GtkTreeViewColumn * col = gtk_tree_view_get_column(treeview, i);
+        gtk_tree_view_column_set_resizable(col, 1);
+    }
+
 
     label = gtk_label_new("Schedule");
     gtk_notebook_append_page(notebook, treeview, label);
+
+
+    /* Make the treeview supports drag and drop from external file manager */
+    gtk_drag_dest_set(treeview, GTK_DEST_DEFAULT_ALL, dndtargets, 3, GDK_ACTION_COPY);
+
+    g_signal_connect(G_OBJECT(treeview), "drag_data_received",
+            G_CALLBACK(drag_drop_schedule), NULL);
 }
 
 void init_notebook_playlists(GtkWidget *notebook) {
@@ -229,6 +255,10 @@ void init_notebook(GtkWidget *notebook) {
     init_notebook_playlists(notebook);
 }
 
+void toggle_play() {
+    char play = 'T';
+    write(socket_fd, (char*)&play, 1); 
+}
 
 int main (int argc, char **argv){
     GtkWidget *slider;
@@ -253,9 +283,11 @@ int main (int argc, char **argv){
     button_play_image = gtk_image_new_from_stock(GTK_STOCK_MEDIA_PLAY, GTK_ICON_SIZE_BUTTON); //8kb
     gtk_button_set_label(button_play, NULL);
     gtk_button_set_image(button_play, button_play_image);
+    g_signal_connect(G_OBJECT(button_play), "clicked",
+            G_CALLBACK(toggle_play), NULL);
 
     init_notebook(notebook);
-    init_menus(vbox);
+    //init_menus(vbox);
 
     /* Layout */
 
